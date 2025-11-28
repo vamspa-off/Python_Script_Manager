@@ -53,8 +53,11 @@ class ErrorDialog(tk.Toplevel):
         self.title("Ошибка скрипта")
         self.geometry("700x500")
         self.resizable(True, True)
-        self.transient(parent)
-        self.grab_set()
+        self.transient(parent)  # Делаем окно модальным
+        self.grab_set()  # Захватываем фокус
+
+        # Устанавливаем поверх всех окон
+        self.attributes('-topmost', True)
 
         self.script_name = script_name
         self.error_message = error_message
@@ -125,6 +128,11 @@ class SettingsDialog(tk.Toplevel):
         self.title("Настройки Script Manager")
         self.geometry("500x400")
         self.resizable(False, False)
+        self.transient(parent)  # Делаем окно модальным
+        self.grab_set()  # Захватываем фокус
+
+        # Устанавливаем поверх всех окон
+        self.attributes('-topmost', True)
 
         self.result = None
         self.init_ui()
@@ -218,6 +226,9 @@ class SettingsDialog(tk.Toplevel):
                 packages_window = tk.Toplevel(self)
                 packages_window.title("Установленные пакеты")
                 packages_window.geometry("600x400")
+                packages_window.transient(self)  # Делаем окно модальным
+                packages_window.grab_set()  # Захватываем фокус
+                packages_window.attributes('-topmost', True)  # Поверх всех окон
 
                 text_frame = ttk.Frame(packages_window, padding=10)
                 text_frame.pack(fill=tk.BOTH, expand=True)
@@ -245,16 +256,6 @@ class SettingsDialog(tk.Toplevel):
         self.destroy()
 
 
-class RoundedFrame(ttk.Frame):
-    """Кастомный фрейм с закругленными углами"""
-
-    def __init__(self, parent, *args, **kwargs):
-        super().__init__(parent, *args, **kwargs)
-        self.configure(relief="solid", borderwidth=1)
-        self.style = ttk.Style()
-        self.style.configure("Rounded.TFrame", background="#f0f0f0")
-
-
 class ScriptManagerTkinter:
     def __init__(self, root):
         self.root = root
@@ -277,6 +278,9 @@ class ScriptManagerTkinter:
         self.scripts_file = "scripts.json"
         self.settings_file = "settings.json"
         self.settings = {}
+
+        # Для отслеживания ошибок
+        self.error_messages = {}  # script_name -> error_message
 
         self.setup_ui()
         self.load_settings()
@@ -301,6 +305,10 @@ class ScriptManagerTkinter:
         style.configure("TProgressbar", background=colors["progress_bg"], troughcolor=colors["progress_bg"])
         style.configure("TLabelframe", background=colors["frame_bg"], foreground=colors["fg"])
         style.configure("TLabelframe.Label", background=colors["frame_bg"], foreground=colors["fg"])
+
+        # Стили для кнопок запуска/остановки
+        style.configure("Start.TButton", background="#d4edda", foreground="#155724")
+        style.configure("Stop.TButton", background="#f8d7da", foreground="#721c24")
 
         # Применяем цвета к основному окну
         self.root.configure(bg=colors["bg"])
@@ -356,7 +364,17 @@ class ScriptManagerTkinter:
 
     def show_error_dialog(self, script_name, error_message):
         """Показывает диалоговое окно с информацией об ошибке"""
-        ErrorDialog(self.root, script_name, error_message, self.current_theme)
+        # Накопление ошибок для одного скрипта
+        if script_name in self.error_messages:
+            self.error_messages[script_name] += f"\n{error_message}"
+        else:
+            self.error_messages[script_name] = error_message
+
+        # Показываем диалог с накопленными ошибками
+        ErrorDialog(self.root, script_name, self.error_messages[script_name], self.current_theme)
+
+        # Очищаем накопленные ошибки для этого скрипта
+        self.error_messages[script_name] = ""
 
     def setup_ui(self):
         # Main menu
@@ -713,9 +731,9 @@ class ScriptManagerTkinter:
                    command=lambda: self.delete_from_active(script_info)).pack(side="right", padx=2)
 
         # Объединенная кнопка запуска/остановки
-        self.toggle_btn = ttk.Button(controls_frame, text="Запуск",
-                                     command=lambda: self.toggle_script(script_info))
-        self.toggle_btn.pack(side="right", padx=2)
+        toggle_btn = ttk.Button(controls_frame, text="Запуск", style="Start.TButton",
+                                command=lambda: self.toggle_script(script_info))
+        toggle_btn.pack(side="right", padx=2)
 
         # Resource monitoring
         resources_frame = ttk.Frame(frame)
@@ -747,7 +765,7 @@ class ScriptManagerTkinter:
             'memory_var': memory_var,
             'cpu_label': cpu_label,
             'memory_label': memory_label,
-            'toggle_btn': self.toggle_btn,
+            'toggle_btn': toggle_btn,
             'is_running': False,
             'last_cpu_times': (0, 0),  # (user, system) время
             'last_check_time': time.time()
@@ -772,15 +790,6 @@ class ScriptManagerTkinter:
         else:
             script_data['toggle_btn'].config(text="Запуск", style="Start.TButton")
 
-        # Настраиваем стили для кнопок
-        style = ttk.Style()
-        if self.current_theme == "dark":
-            style.configure("Start.TButton", background="#d4edda", foreground="#155724")
-            style.configure("Stop.TButton", background="#f8d7da", foreground="#721c24")
-        else:
-            style.configure("Start.TButton", background="#d4edda", foreground="#155724")
-            style.configure("Stop.TButton", background="#f8d7da", foreground="#721c24")
-
     def delete_from_active(self, script_info):
         """Удаляет скрипт из активных (но оставляет в сохраненных)"""
         # Останавливаем скрипт если запущен
@@ -802,6 +811,11 @@ class ScriptManagerTkinter:
         config_window.title("Настройки скрипта")
         config_window.geometry("400x300")
         config_window.resizable(False, False)
+        config_window.transient(self.root)  # Делаем окно модальным
+        config_window.grab_set()  # Захватываем фокус
+
+        # Устанавливаем поверх всех окон
+        config_window.attributes('-topmost', True)
 
         main_frame = ttk.Frame(config_window, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -874,6 +888,9 @@ class ScriptManagerTkinter:
                 packages_window = tk.Toplevel(self.root)
                 packages_window.title("Установленные пакеты")
                 packages_window.geometry("600x400")
+                packages_window.transient(self.root)  # Делаем окно модальным
+                packages_window.grab_set()  # Захватываем фокус
+                packages_window.attributes('-topmost', True)  # Поверх всех окон
 
                 text_frame = ttk.Frame(packages_window, padding=10)
                 text_frame.pack(fill=tk.BOTH, expand=True)
@@ -929,11 +946,15 @@ class ScriptManagerTkinter:
                 except Exception as e:
                     error_msg = f"Не удалось запустить скрипт: {str(e)}"
                     self.show_error_dialog(script_info['name'], error_msg)
+                    # Сбрасываем состояние кнопки при ошибке запуска
+                    script_data['is_running'] = False
+                    self.update_toggle_button(script_data)
                 break
 
     def monitor_script_output(self, script_data):
         """Мониторинг вывода скрипта для перехвата ошибок"""
         process = script_data['process']
+        error_buffer = []  # Буфер для накопления ошибок
 
         # Читаем stderr в реальном времени
         while script_data['is_running'] and process.poll() is None:
@@ -941,11 +962,7 @@ class ScriptManagerTkinter:
                 # Читаем строку ошибки
                 error_line = process.stderr.readline()
                 if error_line and error_line.strip():
-                    # Показываем диалог с ошибкой в главном потоке
-                    self.root.after(0, lambda: self.show_error_dialog(
-                        script_data['script_info']['name'],
-                        f"Ошибка выполнения:\n{error_line}"
-                    ))
+                    error_buffer.append(error_line)
             except:
                 break
 
@@ -955,12 +972,24 @@ class ScriptManagerTkinter:
                 # Получаем оставшиеся ошибки
                 _, stderr = process.communicate(timeout=1)
                 if stderr and stderr.strip():
+                    error_buffer.append(stderr)
+
+                # Если есть ошибки, показываем их все в одном окне
+                if error_buffer:
+                    full_error = "".join(error_buffer)
                     self.root.after(0, lambda: self.show_error_dialog(
                         script_data['script_info']['name'],
-                        f"Процесс завершился с ошибкой (код: {process.returncode}):\n{stderr}"
+                        f"Процесс завершился с ошибкой (код: {process.returncode}):\n{full_error}"
                     ))
             except:
                 pass
+
+        # Если процесс завершился с ошибкой, обновляем состояние
+        if process.poll() is not None:
+            script_data['is_running'] = False
+            script_data['process'] = None
+            script_data['pid'] = None
+            self.root.after(0, lambda: self.update_toggle_button(script_data))
 
     def stop_script(self, script_info):
         for script_data in self.script_frames:
