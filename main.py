@@ -26,7 +26,9 @@ THEMES = {
         "progress_bg": "#e0e0e0",
         "progress_fg": "#0078d7",
         "label_bg": "#f0f0f0",
-        "label_fg": "#000000"
+        "label_fg": "#000000",
+        "console_bg": "#000000",
+        "console_fg": "#00ff00"
     },
     "dark": {
         "bg": "#2d2d30",
@@ -39,9 +41,101 @@ THEMES = {
         "progress_bg": "#3e3e42",
         "progress_fg": "#007acc",
         "label_bg": "#3e3e42",
-        "label_fg": "#ffffff"
+        "label_fg": "#ffffff",
+        "console_bg": "#0c0c0c",
+        "console_fg": "#00ff00"
     }
 }
+
+
+class ConsoleDialog(tk.Toplevel):
+    def __init__(self, parent, script_name, process, theme="light"):
+        super().__init__(parent)
+        self.theme = theme
+        self.colors = THEMES.get(theme, THEMES["light"])
+        self.script_name = script_name
+        self.process = process
+
+        self.title(f"Консоль: {script_name}")
+        self.geometry("800x600")
+        self.resizable(True, True)
+
+        self.output_buffer = []
+        self.setup_ui()
+
+    def setup_ui(self):
+        main_frame = ttk.Frame(self, padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Output area
+        output_frame = ttk.LabelFrame(main_frame, text="Вывод консоли", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        # Text widget for console output - make it read-only
+        self.output_text = tk.Text(
+            output_frame,
+            wrap=tk.WORD,
+            bg=self.colors["console_bg"],
+            fg=self.colors["console_fg"],
+            font=("Consolas", 10),
+            insertbackground=self.colors["console_fg"],
+            state=tk.DISABLED  # Make text widget read-only
+        )
+
+        output_scrollbar = ttk.Scrollbar(output_frame, orient=tk.VERTICAL, command=self.output_text.yview)
+        self.output_text.configure(yscrollcommand=output_scrollbar.set)
+
+        self.output_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        output_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Input area
+        input_frame = ttk.Frame(main_frame)
+        input_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(input_frame, text="Ввод:").pack(side=tk.LEFT, padx=(0, 5))
+
+        self.input_entry = ttk.Entry(input_frame)
+        self.input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.input_entry.bind('<Return>', self.send_input)
+
+        ttk.Button(input_frame, text="Отправить", command=self.send_input).pack(side=tk.RIGHT)
+
+        # Buttons
+        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame.pack(fill=tk.X)
+
+        ttk.Button(buttons_frame, text="Очистить вывод",
+                   command=self.clear_output).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(buttons_frame, text="Закрыть",
+                   command=self.destroy).pack(side=tk.RIGHT)
+
+    def clear_output(self):
+        self.output_text.config(state=tk.NORMAL)
+        self.output_text.delete(1.0, tk.END)
+        self.output_text.config(state=tk.DISABLED)
+
+    def send_input(self, event=None):
+        input_text = self.input_entry.get()
+        if input_text and self.process and self.process.poll() is None:
+            try:
+                # Добавляем новую строку для команды
+                self.process.stdin.write(input_text + '\n')
+                self.process.stdin.flush()
+
+                # Показываем введенную команду в выводе
+                self.append_text(f"> {input_text}\n")
+
+                # Очищаем поле ввода
+                self.input_entry.delete(0, tk.END)
+            except Exception as e:
+                self.append_text(f"Ошибка ввода: {str(e)}\n")
+
+    def append_text(self, text):
+        """Безопасное добавление текста в текстовое поле"""
+        self.output_text.config(state=tk.NORMAL)
+        self.output_text.insert(tk.END, text)
+        self.output_text.see(tk.END)
+        self.output_text.config(state=tk.DISABLED)
 
 
 class ErrorDialog(tk.Toplevel):
@@ -53,10 +147,8 @@ class ErrorDialog(tk.Toplevel):
         self.title("Ошибка скрипта")
         self.geometry("700x500")
         self.resizable(True, True)
-        self.transient(parent)  # Делаем окно модальным
-        self.grab_set()  # Захватываем фокус
-
-        # Устанавливаем поверх всех окон
+        self.transient(parent)
+        self.grab_set()
         self.attributes('-topmost', True)
 
         self.script_name = script_name
@@ -128,10 +220,8 @@ class SettingsDialog(tk.Toplevel):
         self.title("Настройки Script Manager")
         self.geometry("500x400")
         self.resizable(False, False)
-        self.transient(parent)  # Делаем окно модальным
-        self.grab_set()  # Захватываем фокус
-
-        # Устанавливаем поверх всех окон
+        self.transient(parent)
+        self.grab_set()
         self.attributes('-topmost', True)
 
         self.result = None
@@ -226,9 +316,9 @@ class SettingsDialog(tk.Toplevel):
                 packages_window = tk.Toplevel(self)
                 packages_window.title("Установленные пакеты")
                 packages_window.geometry("600x400")
-                packages_window.transient(self)  # Делаем окно модальным
-                packages_window.grab_set()  # Захватываем фокус
-                packages_window.attributes('-topmost', True)  # Поверх всех окон
+                packages_window.transient(self)
+                packages_window.grab_set()
+                packages_window.attributes('-topmost', True)
 
                 text_frame = ttk.Frame(packages_window, padding=10)
                 text_frame.pack(fill=tk.BOTH, expand=True)
@@ -282,6 +372,12 @@ class ScriptManagerTkinter:
         # Для отслеживания ошибок
         self.error_messages = {}  # script_name -> error_message
 
+        # Словарь для хранения открытых консолей
+        self.open_consoles = {}
+
+        # Словарь для хранения буферов вывода каждого процесса
+        self.process_output_buffers = {}
+
         self.setup_ui()
         self.load_settings()
         self.load_scripts()
@@ -296,7 +392,7 @@ class ScriptManagerTkinter:
         style = ttk.Style()
 
         if theme_name == "dark":
-            style.theme_use('clam')  # Используем тему, которая хорошо работает с темными цветами
+            style.theme_use('clam')
 
         # Настройка цветов для различных элементов
         style.configure("TFrame", background=colors["frame_bg"])
@@ -355,6 +451,13 @@ class ScriptManagerTkinter:
             if script_data['is_running']:
                 self.stop_script(script_data['script_info'])
 
+        # Закрываем все открытые консоли
+        for console in self.open_consoles.values():
+            try:
+                console.destroy()
+            except:
+                pass
+
         # Останавливаем иконку в трее
         self.tray_icon.stop()
 
@@ -376,14 +479,53 @@ class ScriptManagerTkinter:
         # Очищаем накопленные ошибки для этого скрипта
         self.error_messages[script_name] = ""
 
+    def open_console(self, script_info):
+        """Открывает консоль для скрипта"""
+        for script_data in self.script_frames:
+            if script_data['script_info'] == script_info and script_data['is_running']:
+                # Если консоль уже открыта, фокусируемся на ней
+                if script_info['name'] in self.open_consoles:
+                    try:
+                        self.open_consoles[script_info['name']].lift()
+                        self.open_consoles[script_info['name']].focus_force()
+                        return
+                    except:
+                        # Если окно было закрыто, удаляем из словаря
+                        del self.open_consoles[script_info['name']]
+
+                # Создаем новую консоль
+                console = ConsoleDialog(
+                    self.root,
+                    script_info['name'],
+                    script_data['process'],
+                    self.current_theme
+                )
+
+                # Восстанавливаем предыдущий вывод если он есть
+                if script_info['name'] in self.process_output_buffers:
+                    console.append_text(self.process_output_buffers[script_info['name']])
+
+                # Сохраняем ссылку на консоль
+                self.open_consoles[script_info['name']] = console
+
+                # Обработка закрытия консоли
+                def on_close(console=console, script_name=script_info['name']):
+                    if script_name in self.open_consoles:
+                        del self.open_consoles[script_name]
+                    console.destroy()
+
+                console.protocol("WM_DELETE_WINDOW", on_close)
+                break
+        else:
+            messagebox.showwarning("Предупреждение", "Скрипт не запущен")
+
     def setup_ui(self):
-        # Main menu
+        # Main menu - убираем меню ДОБАВИТЬ СКРИПТ и добавляем кнопку в правый край
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="ФАЙЛ", menu=file_menu)
-        file_menu.add_command(label="Добавить скрипт", command=self.add_script)
         file_menu.add_command(label="Настройки", command=self.open_settings)
         file_menu.add_separator()
         file_menu.add_command(label="Свернуть в трей", command=self.hide_to_tray)
@@ -396,10 +538,8 @@ class ScriptManagerTkinter:
         view_menu.add_command(label="Тёмная тема", command=lambda: self.change_theme("dark"))
         view_menu.add_command(label="Как в системе", command=lambda: self.change_theme("system"))
 
-        # Меню ДОБАВИТЬ СКРИПТ
-        add_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="ДОБАВИТЬ СКРИПТ", menu=add_menu)
-        add_menu.add_command(label="Добавить скрипт", command=self.add_script)
+        # Кнопка "Добавить скрипт" в правом краю меню
+        menubar.add_command(label="ДОБАВИТЬ СКРИПТ", command=self.add_script)
 
         # System monitoring
         system_frame = ttk.LabelFrame(self.root, text="Общая нагрузка (сумма всех скриптов):", padding=10)
@@ -450,7 +590,7 @@ class ScriptManagerTkinter:
         saved_catalog_frame = ttk.LabelFrame(right_frame, text="КАТАЛОГ ВСЕХ СОХРАНЕННЫХ СКРИПТОВ", padding=10,
                                              width=300)
         saved_catalog_frame.pack(fill="both", expand=True)
-        saved_catalog_frame.pack_propagate(False)  # Prevent frame from shrinking
+        saved_catalog_frame.pack_propagate(False)
 
         # Buttons for saved catalog
         saved_buttons_frame = ttk.Frame(saved_catalog_frame)
@@ -482,8 +622,6 @@ class ScriptManagerTkinter:
     def change_theme(self, theme_name):
         """Изменяет тему приложения"""
         if theme_name == "system":
-            # Здесь можно добавить логику определения системной темы
-            # Пока просто используем светлую тему
             theme_name = "light"
 
         self.current_theme = theme_name
@@ -725,6 +863,12 @@ class ScriptManagerTkinter:
         controls_frame = ttk.Frame(frame)
         controls_frame.pack(fill="x")
 
+        # Кнопка консоли - изначально отключена
+        console_btn = ttk.Button(controls_frame, text="Консоль",
+                                 state=tk.DISABLED,  # Изначально отключена
+                                 command=lambda: self.open_console(script_info))
+        console_btn.pack(side="right", padx=2)
+
         ttk.Button(controls_frame, text="Настройки",
                    command=lambda: self.configure_script(script_info)).pack(side="right", padx=2)
         ttk.Button(controls_frame, text="Удалить из активных",
@@ -766,12 +910,16 @@ class ScriptManagerTkinter:
             'cpu_label': cpu_label,
             'memory_label': memory_label,
             'toggle_btn': toggle_btn,
+            'console_btn': console_btn,
             'is_running': False,
-            'last_cpu_times': (0, 0),  # (user, system) время
+            'last_cpu_times': (0, 0),
             'last_check_time': time.time()
         }
 
         self.script_frames.append(script_frame_data)
+
+        # Явно устанавливаем начальное состояние кнопок
+        self.update_toggle_button(script_frame_data)
 
     def toggle_script(self, script_info):
         """Переключает состояние скрипта (запуск/остановка)"""
@@ -787,8 +935,10 @@ class ScriptManagerTkinter:
         """Обновляет вид кнопки запуска/остановки"""
         if script_data['is_running']:
             script_data['toggle_btn'].config(text="Остановить", style="Stop.TButton")
+            script_data['console_btn'].config(state=tk.NORMAL)
         else:
             script_data['toggle_btn'].config(text="Запуск", style="Start.TButton")
+            script_data['console_btn'].config(state=tk.DISABLED)
 
     def delete_from_active(self, script_info):
         """Удаляет скрипт из активных (но оставляет в сохраненных)"""
@@ -796,7 +946,7 @@ class ScriptManagerTkinter:
         for script_data in self.script_frames:
             if script_data['script_info'] == script_info:
                 if script_data['is_running']:
-                    self.stop_script(script_info)
+                    self.stop_script(script_data['script_info'])
                 break
 
         # Удаляем из активных
@@ -811,10 +961,8 @@ class ScriptManagerTkinter:
         config_window.title("Настройки скрипта")
         config_window.geometry("400x300")
         config_window.resizable(False, False)
-        config_window.transient(self.root)  # Делаем окно модальным
-        config_window.grab_set()  # Захватываем фокус
-
-        # Устанавливаем поверх всех окон
+        config_window.transient(self.root)
+        config_window.grab_set()
         config_window.attributes('-topmost', True)
 
         main_frame = ttk.Frame(config_window, padding=10)
@@ -888,9 +1036,9 @@ class ScriptManagerTkinter:
                 packages_window = tk.Toplevel(self.root)
                 packages_window.title("Установленные пакеты")
                 packages_window.geometry("600x400")
-                packages_window.transient(self.root)  # Делаем окно модальным
-                packages_window.grab_set()  # Захватываем фокус
-                packages_window.attributes('-topmost', True)  # Поверх всех окон
+                packages_window.transient(self.root)
+                packages_window.grab_set()
+                packages_window.attributes('-topmost', True)
 
                 text_frame = ttk.Frame(packages_window, padding=10)
                 text_frame.pack(fill=tk.BOTH, expand=True)
@@ -920,15 +1068,24 @@ class ScriptManagerTkinter:
                         messagebox.showerror("Ошибка", f"Файл {script_info['path']} не найден")
                         return
 
-                    # Запускаем процесс с перехватом вывода
+                    # Запускаем процесс с перехватом вывода и вводом
                     script_data['process'] = subprocess.Popen([
                         script_info['interpreter'],
                         script_info['path']
-                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        stdin=subprocess.PIPE,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True)
 
                     script_data['pid'] = script_data['process'].pid
                     script_data['is_running'] = True
                     self.update_toggle_button(script_data)
+
+                    # Инициализируем буфер вывода для этого процесса
+                    self.process_output_buffers[script_info['name']] = ""
 
                     # Запускаем мониторинг вывода в отдельном потоке
                     threading.Thread(target=self.monitor_script_output,
@@ -952,18 +1109,46 @@ class ScriptManagerTkinter:
                 break
 
     def monitor_script_output(self, script_data):
-        """Мониторинг вывода скрипта для перехвата ошибок"""
+        """Мониторинг вывода скрипта для перехвата ошибок и вывода в консоль"""
         process = script_data['process']
-        error_buffer = []  # Буфер для накопления ошибок
+        script_name = script_data['script_info']['name']
 
-        # Читаем stderr в реальном времени
+        # Функция для безопасного добавления текста в консоль
+        def safe_append_text(text):
+            if script_name in self.open_consoles:
+                console = self.open_consoles[script_name]
+                console.after(0, lambda: console.append_text(text))
+
+        # Сохраняем вывод в буфер и отправляем в открытые консоли
         while script_data['is_running'] and process.poll() is None:
             try:
-                # Читаем строку ошибки
-                error_line = process.stderr.readline()
-                if error_line and error_line.strip():
-                    error_buffer.append(error_line)
-            except:
+                # Читаем stdout
+                stdout_line = process.stdout.readline()
+                if stdout_line:
+                    # Сохраняем в буфер
+                    if script_name in self.process_output_buffers:
+                        self.process_output_buffers[script_name] += stdout_line
+                    else:
+                        self.process_output_buffers[script_name] = stdout_line
+
+                    # Отправляем в открытую консоль
+                    safe_append_text(stdout_line)
+
+                # Читаем stderr
+                stderr_line = process.stderr.readline()
+                if stderr_line:
+                    error_line = f"ERROR: {stderr_line}"
+                    # Сохраняем в буфер
+                    if script_name in self.process_output_buffers:
+                        self.process_output_buffers[script_name] += error_line
+                    else:
+                        self.process_output_buffers[script_name] = error_line
+
+                    # Отправляем в открытую консоль
+                    safe_append_text(error_line)
+
+            except Exception as e:
+                print(f"Ошибка чтения вывода: {e}")
                 break
 
         # После завершения процесса проверяем код возврата
@@ -972,19 +1157,26 @@ class ScriptManagerTkinter:
                 # Получаем оставшиеся ошибки
                 _, stderr = process.communicate(timeout=1)
                 if stderr and stderr.strip():
-                    error_buffer.append(stderr)
+                    error_msg = f"ERROR: {stderr}"
+                    # Сохраняем в буфер
+                    if script_name in self.process_output_buffers:
+                        self.process_output_buffers[script_name] += error_msg
+                    else:
+                        self.process_output_buffers[script_name] = error_msg
+
+                    # Отправляем в открытую консоль
+                    safe_append_text(error_msg)
 
                 # Если есть ошибки, показываем их все в одном окне
-                if error_buffer:
-                    full_error = "".join(error_buffer)
+                if script_name in self.process_output_buffers and "ERROR:" in self.process_output_buffers[script_name]:
                     self.root.after(0, lambda: self.show_error_dialog(
-                        script_data['script_info']['name'],
-                        f"Процесс завершился с ошибкой (код: {process.returncode}):\n{full_error}"
+                        script_name,
+                        f"Процесс завершился с ошибкой (код: {process.returncode}):\n{self.process_output_buffers[script_name]}"
                     ))
             except:
                 pass
 
-        # Если процесс завершился с ошибкой, обновляем состояние
+        # Если процесс завершился, обновляем состояние
         if process.poll() is not None:
             script_data['is_running'] = False
             script_data['process'] = None
@@ -1075,7 +1267,6 @@ class ScriptManagerTkinter:
                     script_data['memory_label'].config(text="0%")
 
             # Общая нагрузка (сумма всех процессов)
-            # Ограничиваем общую нагрузку 100% для CPU
             total_cpu = min(total_cpu, 100)
             total_memory = min(total_memory, 100)
 
