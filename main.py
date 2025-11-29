@@ -650,16 +650,20 @@ class ScriptManagerTkinter:
         ttk.Button(saved_buttons_frame, text="Показать файл",
                    command=self.show_script_file).pack(side="left", padx=2)
 
-        # Treeview for saved scripts
+        # Treeview for saved scripts - ОБНОВЛЕНО: добавлен столбец autostart
         tree_frame = ttk.Frame(saved_catalog_frame)
         tree_frame.pack(fill="both", expand=True)
 
-        self.saved_tree = ttk.Treeview(tree_frame, columns=("status"), show="tree", height=15)
+        # ОБНОВЛЕНО: Добавлен столбец "autostart"
+        self.saved_tree = ttk.Treeview(tree_frame, columns=("status", "autostart"), show="tree headings", height=15)
         self.saved_tree.heading("#0", text="Скрипты")
-        self.saved_tree.column("#0", width=300)
+        self.saved_tree.column("#0", width=250)  # уменьшена ширина для нового столбца
+        self.saved_tree.heading("status", text="Статус")
         self.saved_tree.column("status", width=100)
+        self.saved_tree.heading("autostart", text="Автозапуск")
+        self.saved_tree.column("autostart", width=100)
 
-        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.saved_tree.yview)
+        tree_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.saved_tree.yview)
         self.saved_tree.configure(yscrollcommand=tree_scrollbar.set)
 
         self.saved_tree.pack(side="left", fill="both", expand=True)
@@ -759,7 +763,7 @@ class ScriptManagerTkinter:
         else:
             self.error_messages[script_uuid] = error_message
 
-        # ОБНОВЛЕННЫЙ ВЫЗОВ: передаем путь к скрипту
+        # ИСПРАВЛЕНИЕ: Правильный вызов ErrorDialog с передачей пути
         ErrorDialog(self.root, script_name, script_path, self.error_messages[script_uuid], self.current_theme)
 
         # Очищаем накопленные ошибки для этого скрипта
@@ -929,21 +933,25 @@ class ScriptManagerTkinter:
         self.saved_tree.delete(*self.saved_tree.get_children())
 
         # Активные скрипты
-        active_node = self.saved_tree.insert("", "end", text="Активные скрипты", values=("",))
+        active_node = self.saved_tree.insert("", "end", text="Активные скрипты", values=("", ""))
         for script_uuid in self.active_scripts:
             script_info = self.saved_scripts.get(script_uuid)
             if script_info:
                 display_name = script_info.get('display_name', script_info['name'])
                 # Определяем статус скрипта
                 status = "Запущен" if self.is_script_running(script_uuid) else "Остановлен"
-                self.saved_tree.insert(active_node, "end", text=display_name, values=(status,))
+                # ОБНОВЛЕНО: Добавляем информацию об автозапуске
+                autostart_status = "Автозапуск" if script_info.get('autostart', False) else ""
+                self.saved_tree.insert(active_node, "end", text=display_name, values=(status, autostart_status))
 
         # Неактивные скрипты
-        inactive_node = self.saved_tree.insert("", "end", text="Неактивные скрипты", values=("",))
+        inactive_node = self.saved_tree.insert("", "end", text="Неактивные скрипты", values=("", ""))
         for script_uuid, script_info in self.saved_scripts.items():
             if script_uuid not in self.active_scripts:
                 display_name = script_info.get('display_name', script_info['name'])
-                self.saved_tree.insert(inactive_node, "end", text=display_name, values=("Неактивен",))
+                # ОБНОВЛЕНО: Добавляем информацию об автозапуске
+                autostart_status = "Автозапуск" if script_info.get('autostart', False) else ""
+                self.saved_tree.insert(inactive_node, "end", text=display_name, values=("Неактивен", autostart_status))
 
         # Всегда разворачиваем узлы
         self.saved_tree.item(active_node, open=True)
@@ -1454,8 +1462,6 @@ class ScriptManagerTkinter:
         config_window.transient(self.root)
         config_window.grab_set()
         config_window.attributes('-topmost', True)
-
-        # ИСПРАВЛЕНО: Блокируем главное окно
         config_window.focus_force()
 
         main_frame = ttk.Frame(config_window, padding=10)
@@ -1512,12 +1518,10 @@ class ScriptManagerTkinter:
         def save_config():
             script_info['display_name'] = name_var.get()
             script_info['interpreter'] = interpreter_var.get()
-            # ИСПРАВЛЕНО: Сохраняем настройку автозапуска независимо от состояния скрипта
-            script_info['autostart'] = autostart_var.get()
+            script_info['autostart'] = autostart_var.get()  # Сохраняем настройку автозапуска
 
             config_window.destroy()
-            self.update_saved_tree()
-            # ИСПРАВЛЕНО: Обновляем только конкретный фрейм вместо всех
+            self.update_saved_tree()  # ОБНОВЛЕНО: Обновляем дерево для отображения автозапуска
             self.update_single_script_frame(script_uuid)
             self.save_scripts()
 
@@ -1571,7 +1575,9 @@ class ScriptManagerTkinter:
                 script_info = script_data['script_info']
                 try:
                     if not os.path.exists(script_info['path']):
-                        messagebox.showerror("Ошибка", f"Файл {script_info['path']} не найден")
+                        error_msg = f"Файл {script_info['path']} не найден"
+                        # ИСПРАВЛЕНИЕ: Правильный вызов show_error_dialog с передачей пути
+                        self.show_error_dialog(script_uuid, error_msg)
                         return
 
                     # Запускаем процесс с правильной кодировкой
@@ -1610,7 +1616,7 @@ class ScriptManagerTkinter:
 
                 except Exception as e:
                     error_msg = f"Не удалось запустить скрипт: {str(e)}"
-                    # ОБНОВЛЕННЫЙ ВЫЗОВ: передаем путь к скрипту
+                    # ИСПРАВЛЕНИЕ: Правильный вызов show_error_dialog
                     self.show_error_dialog(script_uuid, error_msg)
                     # Сбрасываем состояние кнопки при ошибке запуска
                     script_data['is_running'] = False
