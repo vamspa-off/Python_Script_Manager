@@ -149,13 +149,14 @@ class ConsoleDialog(tk.Toplevel):
 
 
 class ErrorDialog(tk.Toplevel):
-    def __init__(self, parent, script_name, error_message, theme="light"):
+    def __init__(self, parent, script_name, script_path, error_message, theme="light"):
         super().__init__(parent)
         self.theme = theme
         self.colors = THEMES.get(theme, THEMES["light"])
+        self.script_path = script_path
 
         self.title("Ошибка скрипта")
-        self.geometry("700x500")
+        self.geometry("750x550")
         self.resizable(True, True)
         self.transient(parent)
         self.grab_set()
@@ -174,12 +175,45 @@ class ErrorDialog(tk.Toplevel):
         main_frame = ttk.Frame(self, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Application info
+        app_frame = ttk.Frame(main_frame)
+        app_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(app_frame, text="Python Script Manager (PSM)",
+                  font=('Arial', 12, 'bold')).pack(anchor=tk.W)
+        ttk.Label(app_frame, text="Произошла ошибка при выполнении скрипта",
+                  font=('Arial', 10)).pack(anchor=tk.W, pady=(2, 0))
+
         # Script info
         info_frame = ttk.Frame(main_frame)
         info_frame.pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(info_frame, text="Скрипт:", font=('Arial', 10, 'bold')).pack(anchor=tk.W)
         ttk.Label(info_frame, text=self.script_name, font=('Arial', 10)).pack(anchor=tk.W, pady=(2, 0))
+
+        # Script path with hyperlink
+        path_frame = ttk.Frame(main_frame)
+        path_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(path_frame, text="Путь к файлу:", font=('Arial', 10, 'bold')).pack(anchor=tk.W)
+
+        # Create a clickable path label
+        path_container = ttk.Frame(path_frame)
+        path_container.pack(fill=tk.X, pady=(2, 0))
+
+        path_label = ttk.Label(
+            path_container,
+            text=self.script_path,
+            font=('Arial', 9),
+            foreground="blue",
+            cursor="hand2"
+        )
+        path_label.pack(anchor=tk.W)
+
+        # Bind click event
+        path_label.bind("<Button-1>", self.open_script_directory)
+        path_label.bind("<Enter>", lambda e: path_label.config(foreground="darkblue"))
+        path_label.bind("<Leave>", lambda e: path_label.config(foreground="blue"))
 
         # Time info
         time_frame = ttk.Frame(main_frame)
@@ -196,7 +230,15 @@ class ErrorDialog(tk.Toplevel):
         error_frame.pack(fill=tk.BOTH, expand=True, pady=(5, 10))
 
         # Text widget with scrollbar for error message
-        self.error_text = tk.Text(error_frame, wrap=tk.WORD, width=80, height=15)
+        self.error_text = tk.Text(
+            error_frame,
+            wrap=tk.WORD,
+            width=80,
+            height=15,
+            bg=self.colors["listbox_bg"],
+            fg=self.colors["listbox_fg"],
+            font=("Consolas", 9)
+        )
         scrollbar = ttk.Scrollbar(error_frame, orient=tk.VERTICAL, command=self.error_text.yview)
         self.error_text.configure(yscrollcommand=scrollbar.set)
 
@@ -212,8 +254,21 @@ class ErrorDialog(tk.Toplevel):
 
         ttk.Button(buttons_frame, text="Копировать ошибку",
                    command=self.copy_error).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(buttons_frame, text="Открыть папку скрипта",
+                   command=self.open_script_directory).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(buttons_frame, text="Закрыть",
                    command=self.destroy).pack(side=tk.RIGHT)
+
+    def open_script_directory(self, event=None):
+        """Открывает папку со скриптом в проводнике"""
+        folder_path = os.path.dirname(self.script_path)
+        if os.path.exists(folder_path):
+            try:
+                os.startfile(folder_path)
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось открыть папку: {str(e)}")
+        else:
+            messagebox.showerror("Ошибка", f"Папка {folder_path} не найдена")
 
     def copy_error(self):
         """Копирует текст ошибки в буфер обмена"""
@@ -525,6 +580,12 @@ class ScriptManagerTkinter:
         view_menu.add_command(label="Светлая тема", command=lambda: self.change_theme("light"))
         view_menu.add_command(label="Тёмная тема", command=lambda: self.change_theme("dark"))
 
+        # НОВОЕ МЕНЮ: СПРАВКА
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="СПРАВКА", menu=help_menu)
+        help_menu.add_command(label="Информация", command=self.show_info)
+        help_menu.add_command(label="Репозиторий GitHub", command=self.open_github)
+
         # System monitoring
         system_frame = ttk.LabelFrame(self.root, text="Общая нагрузка (сумма всех скриптов):", padding=10)
         system_frame.pack(fill="x", padx=10, pady=5)
@@ -585,6 +646,9 @@ class ScriptManagerTkinter:
                    command=self.delete_script).pack(side="left", padx=2)
         ttk.Button(saved_buttons_frame, text="Переименовать",
                    command=self.rename_script).pack(side="left", padx=2)
+        # ДОБАВЛЕНА КНОПКА: Показать файл
+        ttk.Button(saved_buttons_frame, text="Показать файл",
+                   command=self.show_script_file).pack(side="left", padx=2)
 
         # Treeview for saved scripts
         tree_frame = ttk.Frame(saved_catalog_frame)
@@ -687,6 +751,7 @@ class ScriptManagerTkinter:
             return
 
         script_name = script_info.get('display_name', script_info['name'])
+        script_path = script_info['path']  # Получаем путь к скрипту
 
         # Накопление ошибок для одного скрипта
         if script_uuid in self.error_messages:
@@ -694,8 +759,8 @@ class ScriptManagerTkinter:
         else:
             self.error_messages[script_uuid] = error_message
 
-        # Показываем диалог с накопленными ошибками
-        ErrorDialog(self.root, script_name, self.error_messages[script_uuid], self.current_theme)
+        # ОБНОВЛЕННЫЙ ВЫЗОВ: передаем путь к скрипту
+        ErrorDialog(self.root, script_name, script_path, self.error_messages[script_uuid], self.current_theme)
 
         # Очищаем накопленные ошибки для этого скрипта
         self.error_messages[script_uuid] = ""
@@ -783,6 +848,81 @@ class ScriptManagerTkinter:
                 elif parent_text == "Неактивные скрипты":
                     # Перемещаем в активные
                     self.add_to_active(script_uuid)
+
+    def show_info(self):
+        """Показывает информацию о программе"""
+        info_text = """Python Script Manager (PSM) - менеджер для управления Python-скриптами
+
+    Версия: 0.11.1(DeepSeek Edition)
+    Разработчик: Vanillllla
+
+    Основные возможности:
+    • Запуск и остановка Python-скриптов
+    • Мониторинг потребления ресурсов (CPU, память)
+    • Интерактивная консоль для взаимодействия со скриптами
+    • Каталог скриптов с возможностью группировки
+    • Темная и светлая темы оформления
+    • Автозапуск скриптов при старте программы
+    • Работа в системном трее
+    • Обработка и отображение ошибок
+
+    Использование:
+    1. Добавьте скрипты через кнопку 'Добавить' в каталоге
+    2. Активируйте скрипты двойным кликом или через меню
+    3. Запускайте/останавливайте скрипты кнопками в основном окне
+    4. Используйте консоль для взаимодействия с запущенными скриптами
+    5. Настройте автозапуск в настройках скрипта
+
+    Для получения дополнительной информации посетите репозиторий GitHub."""
+
+        info_window = tk.Toplevel(self.root)
+        info_window.title("Информация о программе")
+        info_window.geometry("600x500")
+        info_window.resizable(False, False)
+        info_window.transient(self.root)
+        info_window.grab_set()
+        info_window.attributes('-topmost', True)
+
+        main_frame = ttk.Frame(info_window, padding=15)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Title
+        title_label = ttk.Label(main_frame, text="Python Script Manager (PSM)",
+                                font=("Arial", 14, "bold"))
+        title_label.pack(pady=(0, 10))
+
+        # Text widget for info with scrollbar
+        text_frame = ttk.Frame(main_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        text_widget = tk.Text(
+            text_frame,
+            wrap=tk.WORD,
+            padx=10,
+            pady=10,
+            font=("Arial", 10),
+            bg=THEMES[self.current_theme]["listbox_bg"],
+            fg=THEMES[self.current_theme]["listbox_fg"]
+        )
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        text_widget.insert(tk.END, info_text)
+        text_widget.config(state=tk.DISABLED)
+
+        # Close button
+        ttk.Button(main_frame, text="Закрыть", command=info_window.destroy).pack(pady=10)
+
+    def open_github(self):
+        """Открывает репозиторий GitHub в браузере"""
+        try:
+            import webbrowser
+            webbrowser.open("https://github.com/Vanillllla/ScriptManager")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось открыть браузер: {str(e)}")
 
     def update_saved_tree(self):
         """Обновляет дерево сохраненных скриптов"""
@@ -908,6 +1048,8 @@ class ScriptManagerTkinter:
                 self.update_saved_tree()
 
                 # Загружаем скрипты из файла
+                scripts_to_start = []  # Список скриптов для автозапуска
+
                 for script_uuid, script_info in loaded_scripts.items():
                     self.saved_scripts[script_uuid] = script_info
 
@@ -916,22 +1058,20 @@ class ScriptManagerTkinter:
                         self.active_scripts.append(script_uuid)
                         self.create_script_frame(script_uuid)
 
-                        # Восстанавливаем состояние выполнения
-                        if script_info.get('is_running', False):
-                            # Запускаем скрипт после небольшой задержки
-                            self.root.after(1000, lambda s=script_uuid: self.start_script(s))
-
-                    # ДОБАВЛЕНО: Автозапуск скриптов, даже если они не были активны
+                    # Собираем скрипты для автозапуска (только те, у которых autostart=True)
                     if script_info.get('autostart', False):
                         # Если скрипт еще не в активных, добавляем его
                         if script_uuid not in self.active_scripts:
                             self.active_scripts.append(script_uuid)
                             self.create_script_frame(script_uuid)
-                        # Запускаем скрипт после небольшой задержки
-                        self.root.after(1000, lambda s=script_uuid: self.start_script(s))
+                        scripts_to_start.append(script_uuid)
 
                 # Обновляем дерево
                 self.update_saved_tree()
+
+                # Запускаем только скрипты с autostart=True
+                for script_uuid in scripts_to_start:
+                    self.root.after(1000, lambda s=script_uuid: self.start_script(s))
 
         except Exception as e:
             print(f"Ошибка загрузки скриптов: {str(e)}")
@@ -1066,6 +1206,47 @@ class ScriptManagerTkinter:
             # ИСПРАВЛЕНО: Обновляем только конкретный фрейм вместо всех
             self.update_single_script_frame(script_uuid)
             self.save_scripts()
+
+    def show_script_file(self):
+        """Показывает файл скрипта в проводнике"""
+        selection = self.saved_tree.selection()
+        if not selection:
+            messagebox.showwarning("Предупреждение", "Выберите скрипт для показа файла")
+            return
+
+        item = selection[0]
+        parent = self.saved_tree.parent(item)
+
+        if not parent:
+            return
+
+        item_text = self.saved_tree.item(item)["text"]
+
+        # Находим скрипт по имени
+        script_uuid = None
+        for uuid, info in self.saved_scripts.items():
+            if info.get('display_name', info['name']) == item_text:
+                script_uuid = uuid
+                break
+
+        if not script_uuid:
+            return
+
+        script_info = self.saved_scripts.get(script_uuid)
+        if not script_info:
+            return
+
+        script_path = script_info['path']
+        folder_path = os.path.dirname(script_path)
+
+        if os.path.exists(folder_path):
+            try:
+                # Открываем папку в проводнике Windows
+                os.startfile(folder_path)
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось открыть папку: {str(e)}")
+        else:
+            messagebox.showerror("Ошибка", f"Папка {folder_path} не найдена")
 
     def update_single_script_frame(self, script_uuid):
         """Обновляет только один фрейм скрипта"""
@@ -1274,6 +1455,9 @@ class ScriptManagerTkinter:
         config_window.grab_set()
         config_window.attributes('-topmost', True)
 
+        # ИСПРАВЛЕНО: Блокируем главное окно
+        config_window.focus_force()
+
         main_frame = ttk.Frame(config_window, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -1328,6 +1512,7 @@ class ScriptManagerTkinter:
         def save_config():
             script_info['display_name'] = name_var.get()
             script_info['interpreter'] = interpreter_var.get()
+            # ИСПРАВЛЕНО: Сохраняем настройку автозапуска независимо от состояния скрипта
             script_info['autostart'] = autostart_var.get()
 
             config_window.destroy()
@@ -1358,6 +1543,7 @@ class ScriptManagerTkinter:
                 packages_window.transient(self.root)
                 packages_window.grab_set()
                 packages_window.attributes('-topmost', True)
+                packages_window.focus_force()
 
                 text_frame = ttk.Frame(packages_window, padding=10)
                 text_frame.pack(fill=tk.BOTH, expand=True)
@@ -1424,6 +1610,7 @@ class ScriptManagerTkinter:
 
                 except Exception as e:
                     error_msg = f"Не удалось запустить скрипт: {str(e)}"
+                    # ОБНОВЛЕННЫЙ ВЫЗОВ: передаем путь к скрипту
                     self.show_error_dialog(script_uuid, error_msg)
                     # Сбрасываем состояние кнопки при ошибке запуска
                     script_data['is_running'] = False
