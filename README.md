@@ -1,13 +1,13 @@
 # Python Script Manager (PSM) 🐍
 
-[![Release](https://img.shields.io/badge/Version-1.1.0-blue)](https://github.com/Vanillllla/ScriptManager/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/badge/Release-1.1.0-blue)](https://github.com/Vanillllla/ScriptManager/releases/tag/v1.1.0)
 [![Python](https://img.shields.io/badge/Python-3.13%2B-gree)](https://www.python.org/downloads/)
 
 **Менеджер Python-скриптов с графическим интерфейсом для паралельного запуска несколькиз .py скриптов**
 
 ---
 
-## Скачать программу: 
+## Скачать программу: [![Release](https://img.shields.io/badge/Version-1.1.0-blue)](https://github.com/Vanillllla/ScriptManager/releases/tag/v1.1.0)
 
 ---
 
