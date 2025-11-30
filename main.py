@@ -402,8 +402,7 @@ class SettingsDialog(tk.Toplevel):
                 # Сохраняем настройку
                 self.settings['autostart'] = False
 
-            # Сохраняем настройки
-            self.parent.save_settings()
+            # УБРАНО: self.parent.save_settings() - так как self.parent не является ScriptManagerTkinter
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось настроить автозапуск: {str(e)}")
@@ -458,8 +457,6 @@ class SettingsDialog(tk.Toplevel):
             messagebox.showerror("Ошибка", "Таймаут при получении списка пакетов")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка при получении списка пакетов: {str(e)}")
-
-    # УДАЛЕН ДУБЛИРУЮЩИЙ МЕТОД save_settings
 
 
 class RenameDialog(tk.Toplevel):
@@ -1014,6 +1011,7 @@ class ScriptManagerTkinter:
 
         dialog = SettingsDialog(self.root, self.settings)
         self.root.wait_window(dialog)
+        # Сохраняем настройки после закрытия диалога
         self.save_settings()
 
     def load_settings(self):
