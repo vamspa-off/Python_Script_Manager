@@ -4,6 +4,7 @@
 [![Python](https://img.shields.io/badge/Python-3.13%2B-gree)](https://www.python.org/downloads/)
 
 **Менеджер Python-скриптов с графическим интерфейсом для паралельного запуска несколькиз .py скриптов**
+##### Портировано на MAC OS. Проверено на Windows 10 и Mac OS Tahoe
 
 ---
 
